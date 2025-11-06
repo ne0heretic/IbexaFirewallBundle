@@ -180,7 +180,7 @@ class KernelListener
             // Trigger challenge: Generate and short-circuit
             $challenge = $this->challengeService->generateChallenge();
             $this->challengeService->setPending($clientIp, $challenge['id']);
-            $js = $this->challengeService->getJsTemplate($challenge['broken'], $challenge['method']);
+            $js = $this->challengeService->getObfuscatedSolverJs($challenge['broken'], $challenge['method']);
 
             // Generate minimal challenge HTML
             $html = $this->getMinimalChallengeHtml($js, $request); // Inject broken as data-attr if needed
