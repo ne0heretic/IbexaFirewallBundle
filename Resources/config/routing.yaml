@@ -1,0 +1,6 @@
+ne0heretic_firewall.dashboard:
+    path: /ne0heretic_firewall
+    defaults:
+        _controller: ne0heretic_firewall.admin.controller::homeAction
+    options:
+        expose: true

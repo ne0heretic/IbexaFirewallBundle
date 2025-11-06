@@ -1,0 +1,24 @@
+parameters:
+    ne0heretic_firewall.admin.controller.class: Ne0Heretic\FirewallBundle\Controller\AdminController
+    ne0heretic_firewall.frontend.controller.class: Ne0Heretic\FirewallBundle\Controller\FrontendController
+
+services:
+    _defaults:
+        autowire: true
+    Ne0Heretic\FirewallBundle\EventListener\KernelRequestListener:
+        class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
+        arguments: ['@service_container', '@cache.redis', '@ibexa.config.resolver']
+        tags:
+            - { name: 'kernel.event_listener', event: 'kernel.request', method: 'onKernelRequest' }
+
+    Ne0Heretic\FirewallBundle\EventListener\KernelControllerListener:
+        class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
+        arguments: ['@service_container', '@cache.redis', '@ibexa.config.resolver']
+        tags:
+            - { name: 'kernel.event_listener', event: 'kernel.controller', method: 'onKernelController' }
+
+    Ne0Heretic\FirewallBundle\EventListener\KernelResponseListener:
+        class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
+        arguments: ['@service_container', '@cache.redis', '@ibexa.config.resolver']
+        tags:
+            - { name: 'kernel.event_listener', event: 'kernel.response', method: 'onKernelResponse' }
