@@ -16,3 +16,11 @@ services:
         arguments: ['@cache.redis', '%kernel.cache_dir%']
         tags:
             - { name: 'kernel.event_listener', event: 'kernel.response', method: 'onKernelResponse' }
+
+    Ne0Heretic\FirewallBundle\Command\StoreDataCommand:
+        class: Ne0Heretic\FirewallBundle\Command\StoreDataCommand
+        arguments:
+            - '@cache.redis'
+            - '@doctrine'
+        tags:
+            - { name: console.command }

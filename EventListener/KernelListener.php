@@ -34,9 +34,7 @@ class KernelListener
         $this->cache = $cache;
         $this->challengeService = new ChallengeService($cache, $cacheDir);
         $this->botValidator = new BotValidator($cache, $this->challengeService);
-        if(!self::$startTime ) {
-            self::$startTime = microtime(true);
-        }
+        self::$startTime = microtime(true);
         $request = Request::createFromGlobals();
         // Get the request IP (this uses Symfony's built-in logic, which respects trusted_proxies if configured)
         $ip = $request->getClientIp();

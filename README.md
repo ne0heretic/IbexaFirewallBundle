@@ -22,6 +22,10 @@ Ne0Heretic\FirewallBundle\Ne0HereticFirewallBundle::class => ['all' => true],
 
 composer dumpautoload
 
-Requires node javascript-obfuscator:
+# Required
+
+RedisTagAwareAdapter.
+
+Node javascript-obfuscator:
 
 yarn add javascript-obfuscator
