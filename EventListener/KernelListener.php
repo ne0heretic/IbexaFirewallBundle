@@ -2,11 +2,8 @@
 
 namespace Ne0Heretic\FirewallBundle\EventListener;
 
-use Ibexa\Contracts\Core\SiteAccess\ConfigResolverInterface;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
-use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Ne0Heretic\FirewallBundle\Lib\BotValidator;
 use Symfony\Component\Cache\Adapter\RedisTagAwareAdapter;
@@ -15,10 +12,6 @@ use Ne0Heretic\FirewallBundle\Lib\ChallengeService;
 
 class KernelListener
 {
-    /** @var Container */
-    protected $container;
-    /** @var ConfigResolverInterface */
-    protected $configResolver;
     /** @var BotValidator */
     protected $botValidator;
     /** @var RedisTagAwareAdapter */
@@ -26,19 +19,20 @@ class KernelListener
     public static $startTime = null;
     public static $clientIp;
     public static $checkRateLimit = false;
+    public static $isBotAgent = false;
+    public static $isBannedBot = false;
+    public static $isChallenge = false;
+    public static $isRateLimited = false;
     /** @var ChallengeService */
     protected $challengeService;
 
     public function __construct(
-        Container $container,
         RedisTagAwareAdapter $cache,
-        ConfigResolverInterface $configResolver
+        string $cacheDir
     )
     {
-        $this->container    = $container;
-        $this->configResolver = $configResolver;
         $this->cache = $cache;
-        $this->challengeService = new ChallengeService($cache, $container->getParameter('kernel.cache_dir'));
+        $this->challengeService = new ChallengeService($cache, $cacheDir);
         $this->botValidator = new BotValidator($cache, $this->challengeService);
         if(!self::$startTime ) {
             self::$startTime = microtime(true);
@@ -89,80 +83,78 @@ class KernelListener
             // In case we want to allow this IP to make further requests without cookies
             //setcookie('challengeToken', '', time() - 3600, '/', '', false, true); // SameSite=Strict
             //setcookie('challengeId', '', time() - 3600, '/', '', false, true);
-            return true;
         }
-
         // Global ban check
-        if ($this->botValidator->isBanned($clientIp)) {
+        else if ($this->botValidator->isBanned($clientIp)) {
+            self::$isBotAgent = true;
+            self::$isBannedBot = true;
             error_log("Globally banned bot IP: {$clientIp}");
             $response = new Response('Unauthorized bot access', 403);
             $response->setPrivate();
             $response->setSharedMaxAge(0);
             $event->setResponse($response);
-            return false;
         }
-
         // Validate known bots (skip challenge for legit ones)
-        if (stripos($userAgent, 'Googlebot') !== false) {
+        else if (stripos($userAgent, 'Googlebot') !== false) {
+            self::$isBotAgent = true;
             $isValidGooglebot = $this->botValidator->validateGooglebot($clientIp);
             if (!$isValidGooglebot) {
+                self::$isBannedBot = true;
                 error_log("Fake Googlebot detected from IP: {$clientIp} with UA: $userAgent");
                 $this->botValidator->banIpGlobally($clientIp);
                 $response = new Response('Unauthorized bot access', 403);
                 $response->setPrivate();
                 $response->setSharedMaxAge(0);
                 $event->setResponse($response);
-                return false;
             }
-            return true; // Legit bot: Proceed without challenge
         } else if (stripos($userAgent, 'Twitterbot') !== false) {
+            self::$isBotAgent = true;
             $isValidTwitterbot = $this->botValidator->validateTwitterbot($clientIp);
             if (!$isValidTwitterbot) {
+                self::$isBannedBot = true;
                 error_log("Fake Twitterbot detected from IP: {$clientIp} with UA: $userAgent");
                 $this->botValidator->banIpGlobally($clientIp);
                 $response = new Response('Unauthorized bot access', 403);
                 $response->setPrivate();
                 $response->setSharedMaxAge(0);
                 $event->setResponse($response);
-                return false;
             }
-            return true;
         } else if (stripos($userAgent, 'facebookexternalhit') !== false || stripos($userAgent, 'Facebot') !== false) {
+            self::$isBotAgent = true;
             $isValidFacebookbot = $this->botValidator->validateFacebookbot($clientIp);
             if (!$isValidFacebookbot) {
+                self::$isBannedBot = true;
                 error_log("Fake Facebookbot detected from IP: {$clientIp} with UA: $userAgent");
                 $this->botValidator->banIpGlobally($clientIp);
                 $response = new Response('Unauthorized bot access', 403);
                 $response->setPrivate();
                 $response->setSharedMaxAge(0);
                 $event->setResponse($response);
-                return false;
             }
-            return true;
         } else if (stripos($userAgent, 'bingbot') !== false || stripos($userAgent, 'BingPreview') !== false) {
+            self::$isBotAgent = true;
             $isValidBingbot = $this->botValidator->validateBingbot($clientIp);
             if (!$isValidBingbot) {
+                self::$isBannedBot = true;
                 error_log("Fake Bingbot detected from IP: {$clientIp} with UA: $userAgent");
                 $this->botValidator->banIpGlobally($clientIp);
                 $response = new Response('Unauthorized bot access', 403);
                 $response->setPrivate();
                 $response->setSharedMaxAge(0);
                 $event->setResponse($response);
-                return false;
             }
-            return true;
         } else if (stripos($userAgent, 'LinkedInBot') !== false) {
+            self::$isBotAgent = true;
             $isValidLinkedInBot = $this->botValidator->validateLinkedInBot($clientIp);
             if (!$isValidLinkedInBot) {
+                self::$isBannedBot = true;
                 error_log("Fake LinkedInBot detected from IP: {$clientIp} with UA: $userAgent");
                 $this->botValidator->banIpGlobally($clientIp);
                 $response = new Response('Unauthorized bot access', 403);
                 $response->setPrivate();
                 $response->setSharedMaxAge(0);
                 $event->setResponse($response);
-                return false;
             }
-            return true;
         } else {
             self::$checkRateLimit = true;
             // Proactive challenge for all non-bot traffic (if not verified)
@@ -174,9 +166,9 @@ class KernelListener
 
             // Optional: Exempt static assets (adjust paths for your Ibexa setup)
             if (strpos($path, '/media/') === 0 || strpos($path, '/assets/') === 0 || strpos($path, '.css') !== false || strpos($path, '.js') !== false || strpos($path, '.png') !== false || strpos($path, '.jpg') !== false) {
-                return true; // Skip challenge for files
+                return; // Skip challenge for files
             }
-
+            self::$isChallenge = true;
             // Trigger challenge: Generate and short-circuit
             $challenge = $this->challengeService->generateChallenge();
             $this->challengeService->setPending($clientIp, $challenge['id']);
@@ -193,10 +185,7 @@ class KernelListener
             $response->setSharedMaxAge(0);
             $event->setResponse($response);
             error_log("Short-circuit challenge response for IP: {$clientIp}");
-            return false; // Skip controller
         }
-
-        return true;
     }
 
     /**
@@ -219,37 +208,49 @@ class KernelListener
 HTML;
     }
 
-    // Additional methods (e.g., for response events) can be added here as needed
-    /**
-     * @param FilterControllerEvent $event
-     */
-    public function onKernelController(ControllerEvent $event)
-    {
-        // TODO: implement other stuff
-    }
-
     /**
      * @param ResponseEvent $event
      * @return bool
      */
     public function onKernelResponse(ResponseEvent $event)
     {
-        if(!$event->isMasterRequest())
-        {
-            return;
-        }
+        $totalTime = microtime(true) - self::$startTime;
         // Rate limiting check: Block if exceeded
-        $clientIp = self::$clientIp;
-        $request = $event->getRequest();
         // Counting only requests that takes at least 0.1 seconds
         // Or requests that are not 2xx
-        if (self::$checkRateLimit && ((int)($event->getResponse()->getStatusCode()/100) !== 2 || microtime(true) - self::$startTime > 0.1) && !$this->botValidator->checkRateLimit(self::$clientIp)) {
+        $responseCode = (int)($event->getResponse()->getStatusCode()/100);
+        if (!$event->isMasterRequest() && self::$checkRateLimit && ($responseCode !== 2 || $totalTime > 0.1) && !$this->botValidator->checkRateLimit(self::$clientIp)) {
+            self::$isRateLimited = true;
             error_log("Rate limit exceeded for IP: $clientIp");
             $response = new Response('Too Many Requests', 429);
             $response->setPrivate();
             $response->setSharedMaxAge(0);
             $event->setResponse($response);
-            return false;
         }
+        $request = $event->getRequest();
+        $clientIp = self::$clientIp;
+        $userAgent = $request->headers->get('User-Agent') ?? '';
+        $path = $request->getPathInfo();
+        $query = $request->getQueryString();
+        $requestKey = 'request_time_' . microtime() . '-' . md5($path . $query . $clientIp);
+        $userAgent = $request->headers->get('User-Agent') ?? '';
+        $data = [
+            'ip' => $clientIp,
+            'path' => $path,
+            'query' => $query,
+            'agent' => $userAgent,
+            'time' => $totalTime,
+            'isBotAgent' => self::$isBotAgent,
+            'isBannedBot' => self::$isBannedBot,
+            'isChallenge' => self::$isChallenge,
+            'isRateLimited'=> self::$isRateLimited,
+            
+        ];
+        $requestItem = $this->cache->getItem($requestKey);
+        $requestItem->set(json_encode($data));
+        // We temporary cache for 2 minutes
+        // There will be a cron to store in the db every minute
+        $requestItem->expiresAfter(120);
+        $this->cache->save($requestItem);
     }
 }
