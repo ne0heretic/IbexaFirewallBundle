@@ -42,6 +42,8 @@ CREATE TABLE server_metrics (
     apache2_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
     varnish_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
     mysql_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    os_disk DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    data_disk DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
     INDEX idx_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

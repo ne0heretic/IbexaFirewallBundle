@@ -40,7 +40,45 @@ class StoreDataCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $serverData = [];
+
+        // Get the directory of the current script
+        $scriptDir = __DIR__;
+
+        // Get stats for root and script dir
+        $rootStat = stat('/');
+        $scriptStat = stat($scriptDir);
+        $serverData = [
+            'os_disk' => 0,
+            'data_disk' => 0
+        ];
+        if ($rootStat !== false && $scriptStat !== false) {
+            // Check if on different disks
+            $isDifferentDisk = ($rootStat['dev'] !== $scriptStat['dev']);
+            $diskLabel = $isDifferentDisk ? 'Script Disk' : 'Root Disk (same as script)';
+
+            // Function to calculate usage %
+            function getDiskUsagePercent($path) {
+                $total = disk_total_space($path);
+                $free = disk_free_space($path);
+                if ($total <= 0) {
+                    return 0.0;  // Avoid division by zero
+                }
+                return ((($total - $free) / $total) * 100);
+            }
+
+            // Calculate for root
+            $rootTotal = disk_total_space('/');
+            $rootFree = disk_free_space('/');
+
+            // Calculate for script dir
+            $scriptTotal = disk_total_space($scriptDir);
+            $scriptFree = disk_free_space($scriptDir);
+
+            // Calculate percentages
+            $serverData['os_disk'] = getDiskUsagePercent('/');
+            $serverData['data_disk'] = getDiskUsagePercent($scriptDir);
+        }
+
         $nproc = floatval(trim(shell_exec('nproc')));
         $cpuLoad = floatval(shell_exec("cat /proc/loadavg | awk '{print $1}'"));
         $serverData['cpu'] = 100*($cpuLoad/$nproc);
@@ -61,7 +99,7 @@ class StoreDataCommand extends Command
         $connection = $entityManager->getConnection();
         $insertSql = "
             INSERT INTO server_metrics
-            (cpu, memory, redis_mem, apache2_mem, varnish_mem, mysql_mem) VALUES (?, ?, ?, ?, ?, ?)
+            (cpu, memory, redis_mem, apache2_mem, varnish_mem, mysql_mem, os_disk, data_disk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ";
         $params = [
             $serverData['cpu'],
@@ -69,7 +107,9 @@ class StoreDataCommand extends Command
             $serverData['redis_mem'],
             $serverData['apache2_mem'],
             $serverData['varnish_mem'],
-            $serverData['mysql_mem']
+            $serverData['mysql_mem'],
+            $serverData['os_disk'],
+            $serverData['data_disk'],
         ];
         $connection->executeStatement($insertSql, $params);
         // also store in redis
@@ -104,6 +144,13 @@ class StoreDataCommand extends Command
             }
 
         }
+        // TODO: use a separated script for this
+        // Delete http_request_logs entries older than 7 days
+        $deleteSql = "DELETE FROM http_request_logs WHERE timestamp < NOW() - INTERVAL 7 DAY";
+        $connection->executeStatement($deleteSql, []);
+        // Delete server_metrics entries older than 90 days
+        $deleteSql2 = "DELETE FROM server_metrics WHERE timestamp < NOW() - INTERVAL 90 DAY";
+        $connection->executeStatement($deleteSql2, []);
 
         return Command::SUCCESS;
     }
