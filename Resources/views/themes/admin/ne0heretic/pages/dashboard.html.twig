@@ -84,12 +84,15 @@
                 <div class="alert alert-warning">No server metrics available.</div>
             {% endif %}
         </div>
+        <div class="col-12">
+            <div class="ne0heretic-server-metrics-widget"></div>
+        </div>
     </div>
 
     {# Request Stats Section #}
     <div class="row mb-4">
         <div class="col-12">
-            <h2 class="h4 mb-3">Today's Request Stats</h2>
+            <h2 class="h4 mb-3">Past 24 hours Request Stats</h2>
             {% if requestStats is defined %}
                 <div class="row g-3">
                     <div class="col-md-2">
@@ -150,7 +153,7 @@
     <div class="row">
         {# Top Paths Section #}
         <div class="col-md-6">
-            <h3 class="h5 mb-3">Top Paths Today</h3>
+            <h3 class="h5 mb-3">Top Paths Past 24 hours</h3>
             {% if topPaths is defined and topPaths is not empty %}
                 <ul class="list-group">
                     {% for path in topPaths %}

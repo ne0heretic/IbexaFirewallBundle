@@ -26,9 +26,10 @@ composer dumpautoload
 
 RedisTagAwareAdapter.
 
-Node javascript-obfuscator:
+Node:
 
 yarn add javascript-obfuscator
+yarn add chart.js
 
 
 MySQL:

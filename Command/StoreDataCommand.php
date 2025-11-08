@@ -146,11 +146,13 @@ class StoreDataCommand extends Command
         }
         // TODO: use a separated script for this
         // Delete http_request_logs entries older than 7 days
-        $deleteSql = "DELETE FROM http_request_logs WHERE timestamp < NOW() - INTERVAL 7 DAY";
-        $connection->executeStatement($deleteSql, []);
+        $interval7 = (new \DateTime())->sub(new \DateInterval('P7D'))->format('Y-m-d H:i:s');
+        $deleteSql = "DELETE FROM http_request_logs WHERE timestamp < ?";
+        $connection->executeStatement($deleteSql, [$interval7]);
         // Delete server_metrics entries older than 90 days
-        $deleteSql2 = "DELETE FROM server_metrics WHERE timestamp < NOW() - INTERVAL 90 DAY";
-        $connection->executeStatement($deleteSql2, []);
+        $interval90 = (new \DateTime())->sub(new \DateInterval('P90D'))->format('Y-m-d H:i:s');
+        $deleteSql2 = "DELETE FROM server_metrics WHERE timestamp < ?";
+        $connection->executeStatement($deleteSql2, [$interval90]);
 
         return Command::SUCCESS;
     }

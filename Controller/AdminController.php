@@ -62,14 +62,14 @@ class AdminController extends Controller
         }
         $params['latestMetrics'] = $latestMetrics ?? [];
 
-        // Fetch HTTP request log aggregates for today
-        $today = date('Y-m-d');
+        // Fetch HTTP request log aggregates for past 24 hours
+        $start24h = (new \DateTime())->sub(new \DateInterval('P1D'))->format('Y-m-d H:i:s');
         $requestStats = [
-            'total' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE DATE(timestamp) = ?", [$today]),
-            'bots' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isBotAgent = 1 AND DATE(timestamp) = ?", [$today]),
-            'bannedBots' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isBannedBot = 1 AND DATE(timestamp) = ?", [$today]),
-            'challenges' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isChallenge = 1 AND DATE(timestamp) = ?", [$today]),
-            'rateLimited' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isRateLimited = 1 AND DATE(timestamp) = ?", [$today]),
+            'total' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE timestamp >= ?", [$start24h]),
+            'bots' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isBotAgent = 1 AND timestamp >= ?", [$start24h]),
+            'bannedBots' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isBannedBot = 1 AND timestamp >= ?", [$start24h]),
+            'challenges' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isChallenge = 1 AND timestamp >= ?", [$start24h]),
+            'rateLimited' => (int) $connection->fetchOne("SELECT COUNT(*) FROM http_request_logs WHERE isRateLimited = 1 AND timestamp >= ?", [$start24h]),
         ];
         $params['requestStats'] = $requestStats;
 
@@ -82,18 +82,114 @@ class AdminController extends Controller
         );
         $params['recentRequests'] = $recentRequests;
 
-        // Fetch top 5 paths by request count today
+        // Fetch top 5 paths by request count past 24 hours
         $topPaths = $connection->fetchAllAssociative(
             "SELECT path, COUNT(*) as count
              FROM http_request_logs
-             WHERE DATE(timestamp) = ?
+             WHERE timestamp >= ?
              GROUP BY path
              ORDER BY count DESC
              LIMIT 5",
-            [$today]
+            [$start24h]
         );
         $params['topPaths'] = $topPaths;
 
         return $this->render('@ibexadesign/ne0heretic/pages/dashboard.html.twig', $params);
+    }
+
+    public function getMetricsAction(Request $request): JsonResponse
+    {
+        $this->performAccessCheck();
+        $entityManager = $this->doctrine->getManager();
+        $connection = $entityManager->getConnection();
+
+        $range = $request->query->get('range', '3h');
+        $start = $request->query->get('start');
+        $end = $request->query->get('end', (new \DateTimeImmutable())->format('Y-m-d H:i:s'));
+
+        // Determine time range
+        if ($start && $end) {
+            // Custom range
+            $whereClause = "timestamp >= ? AND timestamp <= ?";
+            $params = [$start, $end];
+            $groupBy = $this->getGroupByForCustomRange($start, $end);  // Auto-downsample long customs
+        } else {
+            // Preset ranges
+            $endTime = new \DateTimeImmutable();
+            $startTime = match($range) {
+                '1h' => $endTime->sub(new \DateInterval('PT1H')),
+                '3h' => $endTime->sub(new \DateInterval('PT3H')),
+                '12h' => $endTime->sub(new \DateInterval('PT12H')),
+                '1d' => $endTime->sub(new \DateInterval('P1D')),
+                '3d' => $endTime->sub(new \DateInterval('P3D')),
+                '1w' => $endTime->sub(new \DateInterval('P1W')),
+                default => $endTime->sub(new \DateInterval('PT3H'))
+            };
+            $start = $startTime->format('Y-m-d H:i:s');
+            $end = $endTime->format('Y-m-d H:i:s');
+            $whereClause = "timestamp >= ? AND timestamp <= ?";
+            $params = [$start, $end];
+            $groupBy = $this->getGroupByForRange($range);
+        }
+
+        // Conditional SELECT: Raw for full res, AVG for aggregated
+        $selectClause = $groupBy
+            ? "SELECT timestamp, AVG(cpu) AS cpu, AVG(memory) AS memory, AVG(redis_mem) AS redis_mem, AVG(apache2_mem) AS apache2_mem, AVG(varnish_mem) AS varnish_mem, AVG(mysql_mem) AS mysql_mem, AVG(os_disk) AS os_disk, AVG(data_disk) AS data_disk"
+            : "SELECT timestamp, cpu, memory, redis_mem, apache2_mem, varnish_mem, mysql_mem, os_disk, data_disk";
+
+        $sql = "{$selectClause} FROM server_metrics WHERE {$whereClause}";
+
+        if ($groupBy) {
+            $sql .= " GROUP BY {$groupBy} ORDER BY timestamp ASC";
+        } else {
+            $sql .= " ORDER BY timestamp ASC";
+        }
+
+        $rows = $connection->fetchAllAssociative($sql, $params);
+
+        // Format timestamps as strings
+        $metrics = array_map(function ($row) {
+            $row['timestamp'] = (new \DateTime($row['timestamp']))->format('Y-m-d H:i:s');
+            return $row;
+        }, $rows);
+
+        return new JsonResponse([
+            'success' => true,
+            'data' => $metrics,
+            'range' => $range ?? 'custom',
+            'start' => $start,
+            'end' => $end,
+            'count' => count($metrics)
+        ]);
+    }
+
+    private function getGroupByForRange(string $range): ?string
+    {
+        return match($range) {
+            '1h', '3h' => null,  // Full res: ~60-180 points
+            '12h' => 'UNIX_TIMESTAMP(timestamp) DIV 1800',  // 30-min buckets (~24 points)
+            '1d' => 'DATE_FORMAT(timestamp, "%Y-%m-%d %H")',  // Hourly (~24 points)
+            '3d' => 'DATE(timestamp)',  // Daily (~3 points)
+            '1w' => 'DATE(timestamp)',  // Daily (~7 points)
+            default => null
+        };
+    }
+
+    private function getGroupByForCustomRange(string $start, string $end): ?string
+    {
+        $startDt = new \DateTime($start);
+        $endDt = new \DateTime($end);
+        $durationHours = $startDt->diff($endDt)->h + ($startDt->diff($endDt)->days * 24);
+
+        // Auto-downsample if >3h to cap at ~200 points (assuming 1-min data)
+        if ($durationHours <= 3) {
+            return null;  // Full res
+        } elseif ($durationHours <= 12) {
+            return 'UNIX_TIMESTAMP(timestamp) DIV 1800';  // 30-min
+        } elseif ($durationHours <= 24) {
+            return 'DATE_FORMAT(timestamp, "%Y-%m-%d %H")';  // Hourly
+        } else {
+            return 'DATE(timestamp)';  // Daily
+        }
     }
 }
