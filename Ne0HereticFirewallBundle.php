@@ -10,5 +10,6 @@ class Ne0HereticFirewallBundle extends Bundle
     {
         parent::build($container);
         $eZExtension = $container->getExtension('ibexa');
+        $eZExtension->addPolicyProvider(new Security\PolicyProvider());
     }
 }

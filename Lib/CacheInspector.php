@@ -8,8 +8,27 @@ use ReflectionProperty;
 
 class CacheInspector
 {
+    private static $redis = null;
     public function __construct(private RedisTagAwareAdapter $cacheAdapter)
     {
+    }
+
+    public function getRedisAndNamespace() {
+        if(self::$redis) {
+           return self::$redis;
+        }
+        $reflection = new ReflectionClass($this->cacheAdapter);
+        $redisProperty = $reflection->getProperty('redis');
+        $redisProperty->setAccessible(true);
+        $redis = $redisProperty->getValue($this->cacheAdapter);
+
+        // Full prefix: adapter namespace + your prefix
+        $namespace = $reflection->getProperty('namespace')->getValue($this->cacheAdapter);  // Or hardcode if known
+        if($namespace) {
+            $namespace .= ':';
+        }
+        self::$redis = ['redis' => $redis, 'namespace' => $namespace];
+        return self::$redis;
     }
 
     /**
@@ -18,20 +37,16 @@ class CacheInspector
     public function getKeysByPrefix(string $prefix): array
     {
         $prefix = rtrim($prefix, '*') . '*';
-        $reflection = new ReflectionClass($this->cacheAdapter);
-        $redisProperty = $reflection->getProperty('redis');
-        $redisProperty->setAccessible(true);
-        $redis = $redisProperty->getValue($this->cacheAdapter);
-
+        $redisArr = $this->getRedisAndNamespace();
+        $redis = $redisArr['redis'];
         // Full prefix: adapter namespace + your prefix
-        $namespace = $reflection->getProperty('namespace')->getValue($this->cacheAdapter);  // Or hardcode if known
-        $fullPrefix = $namespace ? $namespace . ':' . $prefix : $prefix;
-
+        $namespace = $redisArr['namespace'];
+        $fullPrefix = $namespace . $prefix;
         $keys = $redis->keys($fullPrefix);
         // Remove the namespace from the start of each key (if present)
         foreach ($keys as &$key) {
-            if ($namespace && strpos($key, $namespace . ':') === 0) {
-                $key = substr($key, strlen($namespace . ':'));
+            if ($namespace && strpos($key, $namespace) === 0) {
+                $key = substr($key, strlen($namespace));
             }
         }
         return $keys;

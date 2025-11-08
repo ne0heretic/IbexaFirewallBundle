@@ -29,3 +29,36 @@ RedisTagAwareAdapter.
 Node javascript-obfuscator:
 
 yarn add javascript-obfuscator
+
+
+MySQL:
+
+CREATE TABLE server_metrics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cpu DECIMAL(5,2) NOT NULL,
+    memory DECIMAL(5,2) NOT NULL,
+    redis_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    apache2_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    varnish_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    mysql_mem DECIMAL(5,2) NOT NULL DEFAULT 0.0000,
+    INDEX idx_timestamp (timestamp)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE http_request_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip VARCHAR(45) NOT NULL,
+    path VARCHAR(255) NOT NULL,
+    query TEXT,
+    agent TEXT,
+    firewallTime DECIMAL(10,6) NOT NULL DEFAULT 0.000000,
+    responseTime DECIMAL(10,6) NOT NULL DEFAULT 0.000000,
+    isBotAgent TINYINT(1) NOT NULL DEFAULT 0,
+    isBannedBot TINYINT(1) NOT NULL DEFAULT 0,
+    isChallenge TINYINT(1) NOT NULL DEFAULT 0,
+    isRateLimited TINYINT(1) NOT NULL DEFAULT 0,
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_ip (ip),
+    INDEX idx_path (path)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

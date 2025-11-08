@@ -1,0 +1,198 @@
+{% extends '@ibexadesign/ne0heretic/layout.html.twig' %}
+
+{% block page_content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h2 mb-1">{{ title }}</h1>
+        </div>
+    </div>
+    {# Server Metrics Section #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="h4 mb-3">Server Metrics</h2>
+            {% if latestMetrics is defined and latestMetrics is not empty %}
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">CPU Usage</h5>
+                                <p class="card-text h3 text-primary">{{ latestMetrics.cpu|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Memory Usage</h5>
+                                <p class="card-text h3 text-info">{{ latestMetrics.memory|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Redis Memory</h5>
+                                <p class="card-text h3 text-success">{{ latestMetrics.redis_mem|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Apache2 Memory</h5>
+                                <p class="card-text h3 text-warning">{{ latestMetrics.apache2_mem|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Varnish Memory</h5>
+                                <p class="card-text h3 text-secondary">{{ latestMetrics.varnish_mem|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">MySQL Memory</h5>
+                                <p class="card-text h3 text-danger">{{ latestMetrics.mysql_mem|number_format(2) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Last Updated</h5>
+                                <p class="card-text">{{ latestMetrics.timestamp|date('Y-m-d H:i:s') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-warning">No server metrics available.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Request Stats Section #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="h4 mb-3">Today's Request Stats</h2>
+            {% if requestStats is defined %}
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Total Requests</h5>
+                                <p class="card-text h3 text-muted">{{ requestStats.total }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Bot Agents</h5>
+                                <p class="card-text h3 text-info">{{ requestStats.bots }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Banned Bots</h5>
+                                <p class="card-text h3 text-danger">{{ requestStats.bannedBots }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Challenges</h5>
+                                <p class="card-text h3 text-warning">{{ requestStats.challenges }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Rate Limited</h5>
+                                <p class="card-text h3 text-secondary">{{ requestStats.rateLimited }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-light text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">Bot Rate</h5>
+                                <p class="card-text h3">{{ (requestStats.bots / requestStats.total * 100)|number_format(1) }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-warning">No request stats available.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        {# Top Paths Section #}
+        <div class="col-md-6">
+            <h3 class="h5 mb-3">Top Paths Today</h3>
+            {% if topPaths is defined %}
+                <ul class="list-group">
+                    {% for path in topPaths %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ path.path|length > 50 ? path.path|slice(0, 50) ~ '...' : path.path }}
+                            <span class="badge bg-primary rounded-pill">{{ path.count }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="alert alert-info">No top paths data.</div>
+            {% endif %}
+        </div>
+
+        {# Recent Requests Section #}
+        <div class="col-md-6">
+            <h3 class="h5 mb-3">Recent Requests</h3>
+            {% if recentRequests is defined %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>IP</th>
+                                <th>Path</th>
+                                <th>Time (Firewall/Response)</th>
+                                <th>Status</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for request in recentRequests %}
+                                <tr>
+                                    <td>{{ request.ip }}</td>
+                                    <td>{{ request.path|length > 30 ? request.path|slice(0, 30) ~ '...' : request.path }}</td>
+                                    <td>{{ request.firewallTime|number_format(6) }}s / {{ request.responseTime|number_format(6) }}s</td>
+                                    <td>
+                                        {% if request.isBannedBot %} <span class="badge bg-danger">Banned Bot</span>
+                                        {% elseif request.isBotAgent %} <span class="badge bg-info">Bot</span>
+                                        {% elseif request.isChallenge %} <span class="badge bg-warning">Challenge</span>
+                                        {% elseif request.isRateLimited %} <span class="badge bg-secondary">Rate Limited</span>
+                                        {% else %} <span class="badge bg-success">OK</span> {% endif %}
+                                    </td>
+                                    <td>{{ request.timestamp|date('H:i:s') }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">No recent requests.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

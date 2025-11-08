@@ -1,6 +1,6 @@
 ne0heretic_firewall.dashboard:
     path: /ne0heretic_firewall
     defaults:
-        _controller: ne0heretic_firewall.admin.controller::homeAction
+        _controller: Ne0Heretic\FirewallBundle\Controller\AdminController::dashboardAction
     options:
         expose: true

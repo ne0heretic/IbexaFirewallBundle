@@ -17,6 +17,7 @@ class KernelListener
     /** @var RedisTagAwareAdapter */
     protected $cache;
     public static $startTime = null;
+    public static $firewallTime = 0;
     public static $clientIp;
     public static $checkRateLimit = false;
     public static $isBotAgent = false;
@@ -31,10 +32,10 @@ class KernelListener
         string $cacheDir
     )
     {
+        self::$startTime = microtime(true);
         $this->cache = $cache;
         $this->challengeService = new ChallengeService($cache, $cacheDir);
         $this->botValidator = new BotValidator($cache, $this->challengeService);
-        self::$startTime = microtime(true);
         $request = Request::createFromGlobals();
         // Get the request IP (this uses Symfony's built-in logic, which respects trusted_proxies if configured)
         $ip = $request->getClientIp();
@@ -55,6 +56,7 @@ class KernelListener
 
         // Use forwarded IP if available and valid, else fallback to direct client IP
         self::$clientIp = $forwardedIp ?: $ip;
+        self::$firewallTime += microtime(true) - self::$startTime;
     }
 
     /**
@@ -66,6 +68,7 @@ class KernelListener
         if (!$event->isMasterRequest()) {
             return;
         }
+        $blockStartTime = microtime(true);
         $request = $event->getRequest();
         $clientIp = self::$clientIp;
         $userAgent = $request->headers->get('User-Agent') ?? '';
@@ -184,6 +187,7 @@ class KernelListener
             $event->setResponse($response);
             error_log("Short-circuit challenge response for IP: {$clientIp}");
         }
+        self::$firewallTime += microtime(true) - $blockStartTime;
     }
 
     /**
@@ -212,12 +216,13 @@ HTML;
      */
     public function onKernelResponse(ResponseEvent $event)
     {
-        $totalTime = microtime(true) - self::$startTime;
+        $blockStartTime = microtime(true);
+        $responseTime = microtime(true) - self::$startTime - self::$firewallTime;
         // Rate limiting check: Block if exceeded
         // Counting only requests that takes at least 0.1 seconds
         // Or requests that are not 2xx
         $responseCode = (int)($event->getResponse()->getStatusCode()/100);
-        if (!$event->isMasterRequest() && self::$checkRateLimit && ($responseCode !== 2 || $totalTime > 0.1) && !$this->botValidator->checkRateLimit(self::$clientIp)) {
+        if (!$event->isMasterRequest() && self::$checkRateLimit && ($responseCode !== 2 || $responseTime > 0.1 || self::$isChallenge) && !$this->botValidator->checkRateLimit(self::$clientIp)) {
             self::$isRateLimited = true;
             error_log("Rate limit exceeded for IP: $clientIp");
             $response = new Response('Too Many Requests', 429);
@@ -232,17 +237,18 @@ HTML;
         $query = $request->getQueryString();
         $requestKey = 'request_time_' . microtime() . '-' . md5($path . $query . $clientIp);
         $userAgent = $request->headers->get('User-Agent') ?? '';
+        self::$firewallTime += microtime(true) - $blockStartTime;
         $data = [
             'ip' => $clientIp,
             'path' => $path,
             'query' => $query,
             'agent' => $userAgent,
-            'time' => $totalTime,
+            'firewallTime' => self::$firewallTime,
+            'responseTime' => $responseTime,
             'isBotAgent' => self::$isBotAgent,
             'isBannedBot' => self::$isBannedBot,
             'isChallenge' => self::$isChallenge,
             'isRateLimited'=> self::$isRateLimited,
-            
         ];
         $requestItem = $this->cache->getItem($requestKey);
         $requestItem->set(json_encode($data));

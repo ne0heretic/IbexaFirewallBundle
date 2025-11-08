@@ -5,6 +5,17 @@ parameters:
 services:
     _defaults:
         autowire: true
+    Ne0Heretic\FirewallBundle\Controller\AdminController:
+        public: true
+        class: Ne0Heretic\FirewallBundle\Controller\AdminController
+        parent: Ibexa\Core\MVC\Symfony\Controller\Controller
+        arguments: ['@cache.redis', '%kernel.cache_dir%', '@doctrine']
+    Ne0Heretic\FirewallBundle\EventListener\MenuListener:
+        class: Ne0Heretic\FirewallBundle\EventListener\MenuListener
+        arguments:
+            - "@security.authorization_checker"
+        tags:
+            - { name: kernel.event_subscriber }
     Ne0Heretic\FirewallBundle\EventListener\KernelRequestListener:
         class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
         arguments: ['@cache.redis', '%kernel.cache_dir%']
