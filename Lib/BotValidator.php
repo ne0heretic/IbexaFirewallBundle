@@ -3,24 +3,18 @@
 namespace Ne0Heretic\FirewallBundle\Lib;
 
 use Symfony\Component\Cache\Adapter\RedisTagAwareAdapter;
-use Ne0Heretic\FirewallBundle\Lib\ChallengeService;
 
 class BotValidator
 {
     /** @var RedisTagAwareAdapter */
     protected $cache;
-    private $challengeService;
+    /** @var array */
+    private array $config;
 
-    // Rate limiting configuration
-    private const RATE_LIMIT_WINDOW = 121; // in seconds
-    private const RATE_LIMIT_MAX_REQUESTS = 30;
-    private const BUCKET_SIZE = 11; // Seconds per bucket
-    private const BUCKET_COUNT = 11; // Buckets to cover the time window
-
-    public function __construct(RedisTagAwareAdapter $cache, ChallengeService $challengeService = null)
+    public function __construct(RedisTagAwareAdapter $cache, ConfigService $configService)
     {
         $this->cache = $cache;
-        $this->challengeService = $challengeService ?? null;
+        $this->config = $configService->getConfig();
     }
 
     /**
@@ -47,13 +41,15 @@ class BotValidator
     {
         $baseKey = 'rate_bucket_' . md5($ip);
         $now = time();
-        $currentBucket = (int) ($now / self::BUCKET_SIZE);
+        $bucketSize = $this->config['rate_limiting']['bucket_size'];
+        $bucketCount = $this->config['rate_limiting']['bucket_count'];
+        $currentBucket = (int) ($now / $bucketSize);
 
         $totalRequests = 0.0;  // Float for weights
         $weight = 1.0;
         $hitCount = 0;  // Debug: number of hit buckets
 
-        for ($i = 0; $i < self::BUCKET_COUNT; $i++) {
+        for ($i = 0; $i < $bucketCount; $i++) {
             $bucketIndex = $currentBucket - $i;
             $bucketKey = $baseKey . '_' . $bucketIndex;
 
@@ -64,16 +60,16 @@ class BotValidator
                 $hitCount++;
             }
             // Decay always (for sliding effect on older slots)
-            $weight -= (1.0 / self::BUCKET_COUNT);
+            $weight -= (1.0 / $bucketCount);
 
             // Only save if hit (avoids storing nulls; set TTL anyway)
             if ($bucketItem->isHit()) {
-                $bucketItem->expiresAfter(self::RATE_LIMIT_WINDOW);
+                $bucketItem->expiresAfter($this->config['rate_limiting']['window']);
                 $this->cache->save($bucketItem);
             }
         }
 
-        if ($totalRequests >= self::RATE_LIMIT_MAX_REQUESTS) {
+        if ($totalRequests >= $this->config['rate_limiting']['max_requests']) {
             $this->banIpGlobally($ip);
             return false;
         }
@@ -82,7 +78,7 @@ class BotValidator
         $currentBucketItem = $this->cache->getItem($baseKey . '_' . $currentBucket);
         $currentCount = $currentBucketItem->get() ?? 0;
         $currentBucketItem->set($currentCount + 1);
-        $currentBucketItem->expiresAfter(self::RATE_LIMIT_WINDOW);
+        $currentBucketItem->expiresAfter($this->config['rate_limiting']['window']);
         $this->cache->save($currentBucketItem);
 
         return true;
@@ -351,14 +347,14 @@ class BotValidator
     }
 
     /**
-     * Helper: Ban IP globally across all bot checks (1h TTL)
+     * Helper: Ban IP globally across all bot checks (TTL from config)
      */
     public function banIpGlobally(string $ip): void
     {
         $banKey = 'bot_ban_' . md5($ip);
         $banItem = $this->cache->getItem($banKey);
         $banItem->set(true);
-        $banItem->expiresAfter(3600);  // 1h; adjust as needed
+        $banItem->expiresAfter($this->config['rate_limiting']['ban_duration']);  // Use config
         $this->cache->save($banItem);
     }
 }

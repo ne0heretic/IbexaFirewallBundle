@@ -9,23 +9,18 @@ services:
         public: true
         class: Ne0Heretic\FirewallBundle\Controller\AdminController
         parent: Ibexa\Core\MVC\Symfony\Controller\Controller
-        arguments: ['@cache.redis', '%kernel.cache_dir%', '@doctrine']
+        arguments: ['@cache.redis', '%kernel.cache_dir%', '@doctrine', '@Ne0Heretic\FirewallBundle\Lib\ConfigService']
     Ne0Heretic\FirewallBundle\EventListener\MenuListener:
         class: Ne0Heretic\FirewallBundle\EventListener\MenuListener
         arguments:
             - "@security.authorization_checker"
         tags:
             - { name: kernel.event_subscriber }
-    Ne0Heretic\FirewallBundle\EventListener\KernelRequestListener:
+    Ne0Heretic\FirewallBundle\EventListener\KernelListener:
         class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
         arguments: ['@cache.redis', '%kernel.cache_dir%']
         tags:
             - { name: 'kernel.event_listener', event: 'kernel.request', method: 'onKernelRequest' }
-
-    Ne0Heretic\FirewallBundle\EventListener\KernelResponseListener:
-        class: Ne0Heretic\FirewallBundle\EventListener\KernelListener
-        arguments: ['@cache.redis', '%kernel.cache_dir%']
-        tags:
             - { name: 'kernel.event_listener', event: 'kernel.response', method: 'onKernelResponse' }
 
     Ne0Heretic\FirewallBundle\Command\StoreDataCommand:
@@ -35,3 +30,8 @@ services:
             - '@doctrine'
         tags:
             - { name: console.command }
+
+    Ne0Heretic\FirewallBundle\Lib\ConfigService:
+        arguments:
+            $doctrine: '@doctrine'
+            $defaults: '%ne0heretic_firewall.defaults%'

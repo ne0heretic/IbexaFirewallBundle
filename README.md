@@ -65,3 +65,8 @@ CREATE TABLE http_request_logs (
     INDEX idx_ip (ip),
     INDEX idx_path (path)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE firewall_config (
+    id INT PRIMARY KEY,
+    config JSON NOT NULL
+);

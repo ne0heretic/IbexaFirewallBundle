@@ -47,14 +47,14 @@ class Ne0HereticFirewallExtension extends Extension implements PrependExtensionI
          *  Load settings related to the current bundle
          */
         $bundleConfigFiles = array(
-            'settings.yaml',
+            'settings.yaml.TODO',
             "settings_{$environment}.yaml",
         );
         $configurations = [];
         foreach ($bundleConfigFiles as $file) {
             try {
                 $path = $fileLocator->locate($file);
-                if(file_exists($file))
+                if(file_exists($path))
                 {
                     $configurations = @array_replace_recursive($configurations, Yaml::parse(file_get_contents($path)));
                 }
@@ -98,6 +98,10 @@ class Ne0HereticFirewallExtension extends Extension implements PrependExtensionI
                 }
             }
         }
+         // Process bundle configuration
+        $configuration = new Configuration();
+        $processedConfig = $this->processConfiguration($configuration, $configs);
+        $container->setParameter('ne0heretic_firewall.defaults', $processedConfig);
     }
 
     /**

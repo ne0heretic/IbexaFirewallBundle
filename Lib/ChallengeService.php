@@ -11,18 +11,14 @@ class ChallengeService
     protected $cache;
     /** @var string */
     private string $cacheDir;
+    /** @var array */
+    private array $config;
 
-    // PoW config
-    private const CHALLENGE_TTL = 300; // 5min
-    private const VERIFIED_TTL = 1800; // 30min
-    private const SECRET_LENGTH = 16; // Bytes for secret
-    private const DUMMY_RATIO = 0.2; // 20% dummies for "break"
-    private const DUMMY_CHAR = '!'; // Not in Base64 alphabet
-
-    public function __construct(RedisTagAwareAdapter $cache, string $cacheDir = null)
+    public function __construct(RedisTagAwareAdapter $cache, string $cacheDir, ConfigService $configService)
     {
         $this->cache = $cache;
         $this->cacheDir = $cacheDir ?? sys_get_temp_dir(); // Fallback
+        $this->config = $configService->getConfig();
     }
 
     /**
@@ -30,7 +26,7 @@ class ChallengeService
      */
     public function generateChallenge(): array
     {
-        $secret = random_bytes(self::SECRET_LENGTH);
+        $secret = random_bytes($this->config['challenge']['secret_length']);
         $encoded = base64_encode($secret);
         $broken = $this->breakString($encoded);
 
@@ -43,7 +39,7 @@ class ChallengeService
             'method' => $method,
             'encoded' => $encoded
         ]);
-        $item->expiresAfter(self::CHALLENGE_TTL);
+        $item->expiresAfter($this->config['challenge']['ttl']);
         $this->cache->save($item);
 
         return [
@@ -60,11 +56,12 @@ class ChallengeService
     {
         $reversed = strrev($encoded);
         $len = strlen($reversed);
-        $dummies = (int) ($len * self::DUMMY_RATIO);
+        $dummies = (int) ($len * $this->config['challenge']['dummy_ratio']);
         $broken = $reversed;
+        $dummyChar = $this->config['challenge']['dummy_char'];
         for ($i = 0; $i < $dummies; $i++) {
             $pos = random_int(0, $len + $i);
-            $broken = substr($broken, 0, $pos) . self::DUMMY_CHAR . substr($broken, $pos);
+            $broken = substr($broken, 0, $pos) . $dummyChar . substr($broken, $pos);
         }
         return $broken;
     }
@@ -87,6 +84,7 @@ class ChallengeService
             'reverse_filter_dummy' => 'const fixed = broken.split("").reverse().join("").replace(/!/g, "");',
             default => 'const fixed = broken;'
         };
+        $secretLength = $this->config['challenge']['secret_length'];
 
         return <<<JS
     (function() {
@@ -117,7 +115,7 @@ class ChallengeService
         {$fixLogic}
         try {
             const rawToken = atob(fixed);
-            if (rawToken.length === 16) {
+            if (rawToken.length === {$secretLength}) {
                 const safeToken = btoa(rawToken); // Re-base64 for safe transmission
                 localStorage.setItem('challengeToken', safeToken);
                 localStorage.setItem('challengeId', broken);
@@ -208,7 +206,7 @@ class ChallengeService
             return false;
         }
 
-        if (strlen($submittedSecret) !== self::SECRET_LENGTH || $submittedSecret !== $expectedSecret) {
+        if (strlen($submittedSecret) !== $this->config['challenge']['secret_length'] || $submittedSecret !== $expectedSecret) {
             error_log("Verify fail: Mismatch for ID {$challengeId}. Expected: " . bin2hex($expectedSecret) . " Submitted: " . bin2hex($submittedSecret));
             return false;
         }
@@ -235,7 +233,7 @@ class ChallengeService
         $key = 'challenge_verified_' . md5($ip);
         $item = $this->cache->getItem($key);
         $item->set(true);
-        $item->expiresAfter(self::VERIFIED_TTL);
+        $item->expiresAfter($this->config['challenge']['verified_ttl']);
         $this->cache->save($item);
     }
 
@@ -247,7 +245,7 @@ class ChallengeService
         $key = 'challenge_pending_' . md5($ip);
         $item = $this->cache->getItem($key);
         $item->set($challengeId);
-        $item->expiresAfter(self::CHALLENGE_TTL);
+        $item->expiresAfter($this->config['challenge']['ttl']);
         $this->cache->save($item);
     }
 

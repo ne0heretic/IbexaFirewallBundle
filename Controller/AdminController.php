@@ -10,6 +10,15 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Cache\Adapter\RedisTagAwareAdapter;
 use Symfony\Bridge\Doctrine\ManagerRegistry;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormType;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Ne0Heretic\FirewallBundle\Lib\ConfigService;
+use Ne0Heretic\FirewallBundle\Form\FirewallSettingsType;
 
 class AdminController extends Controller
 {
@@ -17,15 +26,22 @@ class AdminController extends Controller
     protected $cache;
     /** @var string */
     protected $cacheDir;
+    /** @var ManagerRegistry */
+    protected $doctrine;
+    /** @var ConfigService */
+    protected $configService;
+
     public function __construct(
         RedisTagAwareAdapter $cache,
         string $cacheDir,
-        ManagerRegistry $doctrine
+        ManagerRegistry $doctrine,
+        ConfigService $configService
     )
     {
         $this->cache = $cache;
         $this->cacheDir = $cacheDir;
         $this->doctrine = $doctrine;
+        $this->configService = $configService;
     }
 
     public function performAccessCheck(): void
@@ -47,7 +63,6 @@ class AdminController extends Controller
         $request = Request::createFromGlobals();
         $entityManager = $this->doctrine->getManager();
         $connection = $entityManager->getConnection();
-        $request = Request::createFromGlobals();
 
         // Fetch latest server metrics from cache or DB
         $metricsCacheItem = $this->cache->getItem('ne0heretic_server_metrics');
@@ -191,5 +206,90 @@ class AdminController extends Controller
         } else {
             return 'DATE(timestamp)';  // Daily
         }
+    }
+
+    public function settingsAction(Request $request)
+    {
+        $this->performAccessCheck();
+        $config = $this->configService->getConfig();
+        $formData = $this->flattenConfig($config);
+        $form = $this->createForm(FirewallSettingsType::class, $formData);
+
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $newFormData = $form->getData();
+            $newConfig = $this->unflattenConfig($newFormData);
+            $this->configService->updateConfig($newConfig);
+            $this->addFlash('success', 'Settings updated successfully. Some changes may require a page reload or server restart to take effect.');
+        }
+
+        $pathItems = [
+            ['value' => 'Firewall'],
+            ['value' => 'Settings'],
+        ];
+        $params = [
+            'title' => 'Firewall Settings',
+            'path_items' => $pathItems,
+            'form' => $form->createView(),
+        ];
+
+        return $this->render('@ibexadesign/ne0heretic/pages/settings.html.twig', $params);
+    }
+
+    private function flattenConfig(array $config): array
+    {
+        return [
+            'rate_limiting_window' => $config['rate_limiting']['window'],
+            'rate_limiting_max_requests' => $config['rate_limiting']['max_requests'],
+            'rate_limiting_bucket_size' => $config['rate_limiting']['bucket_size'],
+            'rate_limiting_bucket_count' => $config['rate_limiting']['bucket_count'],
+            'rate_limiting_ban_duration' => $config['rate_limiting']['ban_duration'],
+            'challenge_ttl' => $config['challenge']['ttl'],
+            'challenge_verified_ttl' => $config['challenge']['verified_ttl'],
+            'challenge_secret_length' => $config['challenge']['secret_length'],
+            'challenge_dummy_ratio' => $config['challenge']['dummy_ratio'],
+            'challenge_dummy_char' => $config['challenge']['dummy_char'],
+            'challenge_enabled_for_non_bots' => $config['challenge']['enabled_for_non_bots'],
+            'bots_google_enabled' => $config['bots']['google_enabled'],
+            'bots_twitter_enabled' => $config['bots']['twitter_enabled'],
+            'bots_facebook_enabled' => $config['bots']['facebook_enabled'],
+            'bots_bing_enabled' => $config['bots']['bing_enabled'],
+            'bots_linkedin_enabled' => $config['bots']['linkedin_enabled'],
+            'enable_rate_limiting' => $config['enable_rate_limiting'],
+            'exemptions_paths' => implode(',', $config['exemptions']['paths'] ?? []),
+        ];
+    }
+
+    private function unflattenConfig(array $flat): array
+    {
+        $paths = array_filter(array_map('trim', explode(',', $flat['exemptions_paths'] ?? '')));
+        return [
+            'rate_limiting' => [
+                'window' => $flat['rate_limiting_window'],
+                'max_requests' => $flat['rate_limiting_max_requests'],
+                'bucket_size' => $flat['rate_limiting_bucket_size'],
+                'bucket_count' => $flat['rate_limiting_bucket_count'],
+                'ban_duration' => $flat['rate_limiting_ban_duration'],
+            ],
+            'challenge' => [
+                'ttl' => $flat['challenge_ttl'],
+                'verified_ttl' => $flat['challenge_verified_ttl'],
+                'secret_length' => $flat['challenge_secret_length'],
+                'dummy_ratio' => $flat['challenge_dummy_ratio'],
+                'dummy_char' => $flat['challenge_dummy_char'],
+                'enabled_for_non_bots' => $flat['challenge_enabled_for_non_bots'],
+            ],
+            'bots' => [
+                'google_enabled' => $flat['bots_google_enabled'],
+                'twitter_enabled' => $flat['bots_twitter_enabled'],
+                'facebook_enabled' => $flat['bots_facebook_enabled'],
+                'bing_enabled' => $flat['bots_bing_enabled'],
+                'linkedin_enabled' => $flat['bots_linkedin_enabled'],
+            ],
+            'exemptions' => [
+                'paths' => $paths,
+            ],
+            'enable_rate_limiting' => $flat['enable_rate_limiting'],
+        ];
     }
 }

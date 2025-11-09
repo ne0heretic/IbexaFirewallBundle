@@ -13,3 +13,11 @@ ne0heretic_firewall.metrics:
         expose: true
     requirements:
         _method: GET
+
+ne0heretic_firewall.settings:
+    path: /ne0heretic_firewall/settings
+    defaults:
+        _controller: Ne0Heretic\FirewallBundle\Controller\AdminController::settingsAction
+    options:
+        expose: true
+
