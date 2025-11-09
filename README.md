@@ -63,14 +63,15 @@ This bundle is lightweight, Redis-powered for caching, and integrates seamlessly
 3. **Install Dependencies**:
    - Ensure Redis is running and configured in `config/packages/cache.yaml` (use `cache.app` pool).
    - Install JS obfuscator globally (optional but recommended):
-     ```bash
+   ```bash
     yarn add javascript-obfuscator
-     ```
+
+   ```
 
    - Install other yarn dependencies:
-     ```bash
+   ```bash
     yarn add chart.js
-     ```
+   ```
 
 4. **Database Setup**:
    Execute the following SQL to create required tables:
