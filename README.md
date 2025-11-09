@@ -34,6 +34,7 @@ This bundle is lightweight, Redis-powered for caching, and integrates seamlessly
 
 2. **Enable the Bundle** (if not auto-registered):
     Update composer.json "autoload" to:
+
     ```javascript
         "autoload": {
             "psr-4": {
@@ -65,6 +66,7 @@ This bundle is lightweight, Redis-powered for caching, and integrates seamlessly
      ```bash
     yarn add javascript-obfuscator
      ```
+
    - Install other yarn dependencies:
      ```bash
     yarn add chart.js
