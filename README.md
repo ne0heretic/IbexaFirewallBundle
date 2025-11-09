@@ -205,6 +205,6 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 - Issues: [GitHub Issues](https://github.com/ne0heretic/IbexaFirewallBundle/issues)
 - Docs: Inline code comments.
-- Twitter: [Thiago Campos Viana @ne0heretic](https://twitter.com/ne0heretic) for updates.
+- Twitter: [Thiago Campos Viana (@ne0heretic)](https://twitter.com/ne0heretic) for updates.
 
 Built with ❤️ for the Ibexa community. Contributions welcome!
