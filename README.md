@@ -1,4 +1,4 @@
-# Ne0Heretic Firewall Bundle for Ibexa
+# Haeretici Firewall Bundle for Ibexa
 
 A robust, configurable firewall bundle for [Ibexa CMS](https://ibexa.co/) (formerly eZ Platform) designed to protect against bots, DDoS attacks, and malicious traffic. It combines bot validation (via DNS checks for known crawlers), rate limiting, and a client-side JavaScript Proof-of-Work (PoW) challenge system to ensure only legitimate browsers proceed.
 
@@ -29,7 +29,7 @@ This bundle is lightweight, Redis-powered for caching, and integrates seamlessly
 
 1. **Install the Bundle via Composer**:
    ```bash
-   composer require ne0heretic/firewall-bundle
+   composer require haeretici/firewall-bundle
    ```
 
 2. **Enable the Bundle** (if not auto-registered):
@@ -203,8 +203,8 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/ne0heretic/IbexaFirewallBundle/issues)
+- Issues: [GitHub Issues](https://github.com/haeretici/IbexaFirewallBundle/issues)
 - Docs: Inline code comments.
-- Twitter: [Thiago Campos Viana (@ne0heretic)](https://twitter.com/ne0heretic) for updates.
+- Twitter: [Thiago Campos Viana (@haeretici)](https://twitter.com/haeretici) for updates.
 
 Built with ❤️ for the Ibexa community. Contributions welcome!
